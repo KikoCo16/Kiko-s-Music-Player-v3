@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Gemini-Fi Ultimate Mobile</title>
+    <style>
+        :root {
+            --bg-black: #000000; --bg-dark: #121212; --bg-light: #282828;
+            --spotify-green: #1db954; --text-grey: #b3b3b3;
+            --nav-height: 70px; --player-height: 85px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: var(--bg-black); color: white;
+            height: 100vh; overflow: hidden; display: flex; flex-direction: column;
+        }
+
+        main { 
+            flex: 1; overflow-y: auto; padding: 20px 16px;
+            background: linear-gradient(to bottom, #1e1e1e, var(--bg-black));
+            padding-bottom: calc(var(--nav-height) + var(--player-height) + 20px);
+        }
+
+        h1 { margin-bottom: 20px; font-size: 26px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+
+        .card { background: #181818; padding: 12px; border-radius: 8px; position: relative; }
+        .card img { width: 75%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; margin-bottom: 8px; }
+        .card h4 { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        
+        .card-meta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; margin-top: 8px; gap: 5px; }
+        .btn-action { background: none; border: 1px solid #444; color: white; padding: 4px 6px; border-radius: 10px; font-size: 10px; cursor: pointer; }
+        .del-btn { background: rgba(0,0,0,0.7); color: white; border: none; width: 26px; height: 26px; border-radius: 50%; position: absolute; top: 16px; right: 16px; z-index: 5; }
+
+        .stat-card { background: var(--bg-light); padding: 20px; border-radius: 12px; margin-bottom: 15px; text-align: center; }
+        .stat-val { color: var(--spotify-green); font-size: 32px; font-weight: bold; display: block; }
+
+        #mini-player {
+            position: fixed; bottom: var(--nav-height); left: 0; right: 0;
+            background: #282828; height: var(--player-height);
+            display: flex; flex-direction: column; z-index: 50;
+        }
+        #seek-bar-container { width: 100%; height: 15px; display: flex; align-items: center; cursor: pointer; }
+        #seek-bg { width: 100%; height: 4px; background: #4f4f4f; position: relative; }
+        #progress-fill { height: 100%; width: 0%; background: var(--spotify-green); transition: width 0.1s linear; }
+        #player-controls { display: flex; align-items: center; padding: 0 15px; flex: 1; width: 100%; }
+
+        nav {
+            position: fixed; bottom: 0; left: 0; right: 0; height: var(--nav-height);
+            background: #000; display: flex; justify-content: space-around;
+            align-items: center; border-top: 1px solid #282828; z-index: 50;
+        }
+        .nav-item { color: var(--text-grey); text-align: center; font-size: 11px; background:none; border:none; }
+        .nav-item.active { color: white; font-weight: bold; }
+
+        .btn-green { background: var(grey); border: none; padding: 14px; border-radius: 30px; font-weight: bold; width: 100%; margin-bottom: 20px; color: black; font-size: 16px; }
+
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; z-index: 100; }
+        .modal { position: fixed; bottom: 0; left: 0; right: 0; background: #282828; padding: 25px; border-radius: 20px 20px 0 0; display: none; z-index: 101; }
+        .pl-option { padding: 18px; border-bottom: 1px solid #383838; text-align: left; width: 100%; background: none; color: white; font-size: 16px; border: none; }
+    </style>
+</head>
+<body>
+
+    <main id="main-content"></main>
+
+    <div id="yt-player" style="display:none"></div>
+
+    <div id="mini-player">
+        <div id="seek-bar-container" onclick="seek(event)">
+            <div id="seek-bg"><div id="progress-fill"></div></div>
+        </div>
+        <div id="player-controls">
+    <div style="flex: 1; overflow: hidden; margin-right: 10px;">
+        <div id="m-title" style="font-weight: bold; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Kiko</div>
+        <div id="m-sub" style="font-size: 11px; color: var(--text-grey);">Prêt à l'écoute</div>
+    </div>
+    <div style="display: flex; gap: 8px; align-items: center;">
+        <button onclick="toggleShuffle()" id="shuf-btn" style="background:none; border:none; color:var(--text-grey); font-size: 18px;">🔀</button>
+        <button onclick="prev()" style="background:none; border:none; color:white; font-size: 24px;">⏮</button>
+        <button id="p-btn" onclick="togglePlay()" style="background:white; border:none; width: 40px; height: 40px; border-radius: 50%; font-size: 18px;">▶</button>
+        <button onclick="next()" style="background:none; border:none; color:white; font-size: 24px;">⏭</button>
+    </div>
+</div>
+
+
+    </div>
+
+    <nav>
+        <button class="nav-item active" onclick="nav('main', this)">🏠<br>Accueil</button>
+        <button class="nav-item" onclick="nav('playlists', this)">📂<br>Playlists</button>
+        <button class="nav-item" onclick="nav('liked-songs', this)">❤️<br>Likés</button>
+        <button class="nav-item" onclick="nav('stats', this)">📊<br>Stats</button>
+    </nav>
+
+    <div class="overlay" id="overlay" onclick="closeModals()"></div>
+    
+    <div class="modal" id="add-modal">
+        <h3 style="margin-bottom: 20px; text-align: center;">Importer Musique</h3>
+        <button onclick="document.getElementById('file-input').click()" class="btn-green">📁 Fichier MP3 Local</button>
+        <button onclick="importYoutube()" class="btn-green" style="background:#ff0000; color:white;">🎬 Lien YouTube</button>
+        <button onclick="closeModals()" style="width:100%; background:none; border:none; color:var(--text-grey); margin-top:10px;">Annuler</button>
+    </div>
+
+    <div class="modal" id="pl-select-modal">
+        <h3 style="margin-bottom: 15px; text-align: center;">Ajouter à une playlist</h3>
+        <div id="pl-options-list" style="max-height: 300px; overflow-y: auto;"></div>
+    </div>
+
+    <input type="file" id="file-input" multiple accept="audio/*" style="display:none" onchange="handleFileUpload(event)">
+
+    <script src="https://www.youtube.com/iframe_api"></script>
+
+<script>
+    // --- CONFIGURATION & ÉTAT ---
+    const manifest = {
+        "name": "Kiko's Music",
+        "short_name": "Kiko",
+        "start_url": window.location.href,
+        "display": "standalone",
+        "background_color": "#000000",
+        "theme_color": "#1db954",
+        "icons": [{
+            "src": "https://i.pinimg.com/736x/ff/d9/71/ffd971030795766c0f643d90214df61b.jpg",
+            "sizes": "192x192",
+            "type": "image/png"
+        }]
+    };
+
+    const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+    const link = document.createElement('link');
+    link.rel = 'manifest';
+    link.href = URL.createObjectURL(blob);
+    document.head.appendChild(link);
+
+    const audio = new Audio();
+    let ytPlayer, ytReady = false;
+    let db, selectedSongId = null, isCounted = false;
+    let state = {
+        all: [], playlists: [], view: 'main',
+        currentIdx: 0, activeList: [], 
+        repeatMode: 'shuffle',
+        stats: { totalSeconds: 0, totalPlays: 0 }
+    };
+
+    // --- INITIALISATION YOUTUBE ---
+    function onYouTubeIframeAPIReady() {
+        ytPlayer = new YT.Player('yt-player', {
+            height: '0', width: '0',
+            events: { 
+                'onStateChange': (e) => { if (e.data === YT.PlayerState.ENDED) next(); },
+                'onReady': () => ytReady = true 
+            }
+        });
+    }
+
+    // --- BASE DE DONNÉES (IndexedDB) ---
+    const request = indexedDB.open("GeminiFi_V6_Mobile", 1);
+    request.onupgradeneeded = (e) => {
+        db = e.target.result;
+        if (!db.objectStoreNames.contains("songs")) db.createObjectStore("songs", { keyPath: "id" });
+    };
+    request.onsuccess = (e) => {
+        db = e.target.result;
+        loadData();
+    };
+
+    function loadData() {
+        const transaction = db.transaction("songs", "readonly");
+        const store = transaction.objectStore("songs");
+        const getAll = store.getAll();
+        getAll.onsuccess = () => {
+            state.all = getAll.result.map(m => ({ 
+                ...m, 
+                url: m.blob ? URL.createObjectURL(m.blob) : null 
+            }));
+            state.playlists = JSON.parse(localStorage.getItem('g_playlists_v6') || "[]");
+            state.stats = JSON.parse(localStorage.getItem('g_stats_v6') || JSON.stringify({ totalSeconds: 0, totalPlays: 0 }));
+            state.playlists.forEach(pl => {
+                pl.tracks = pl.tracks.map(id => state.all.find(m => m.id === id)).filter(m => m);
+            });
+            render();
+        };
+    }
+
+    function save() {
+        const plData = state.playlists.map(pl => ({ ...pl, tracks: pl.tracks.map(t => t.id) }));
+        localStorage.setItem('g_playlists_v6', JSON.stringify(plData));
+        localStorage.setItem('g_stats_v6', JSON.stringify(state.stats));
+    }
+
+    // --- LOGIQUE D'IMPORTATION (Spotify / YouTube / Local) ---
+
+    function importYoutube() {
+        const url = prompt("Lien YouTube (ex: https://www.youtube.com/watch?v=...) :");
+        if(url) processYoutubeImport(url);
+    }
+
+    function processYoutubeImport(url, customName = null) {
+        const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+        const match = url.match(regex);
+        
+        if(match && match[1]) {
+            const track = { 
+                id: 'yt-'+Math.random().toString(36).substr(2,9), 
+                name: customName || prompt("Nom de la musique :", "Nouveau titre"), 
+                liked: false, 
+                ytId: match[1], 
+                playCount: 0 
+            };
+            const tx = db.transaction("songs", "readwrite");
+            tx.objectStore("songs").put(track);
+            tx.oncomplete = () => { state.all.push(track); render(); closeModals(); };
+        } else {
+            alert("Lien YouTube invalide.");
+        }
+    }
+
+    function handleFileUpload(event) {
+        const files = Array.from(event.target.files);
+        const transaction = db.transaction("songs", "readwrite");
+        const store = transaction.objectStore("songs");
+        files.forEach(file => {
+            const track = { id: 's-'+Math.random().toString(36).substr(2,9), name: file.name.replace(/\.[^/.]+$/, ""), liked: false, blob: file, playCount: 0 };
+            store.put(track);
+            state.all.push({ ...track, url: URL.createObjectURL(file) });
+        });
+        transaction.oncomplete = () => { render(); closeModals(); };
+    }
+
+    // --- INTERFACE & RENDU ---
+    function render() {
+        const container = document.getElementById('main-content');
+        let html = "";
+        if(state.view === 'main') {
+            html = `<h1>Ma Musique</h1><button class="btn-green" onclick="openAdd()">+ Importer</button><div class="grid">${state.all.map((m, i) => card(m, i, 'main')).join('')}</div>`;
+        } else if(state.view === 'playlists') {
+            html = `<h1>Playlists</h1><button class="btn-green" onclick="createPlaylist()">+ Nouvelle Playlist</button><div class="grid">${state.playlists.map((p, i) => plCard(p, i)).join('')}</div>`;
+        } else if(state.view === 'pl-detail') {
+            const pl = state.playlists[state.currentPlIdx];
+            html = `<h1>${pl.name}</h1><button class="btn-green" onclick="nav('main')">Ajouter des titres</button><div class="grid">${pl.tracks.map((m, i) => card(m, i, 'pl')).join('')}</div>`;
+        } else if(state.view === 'stats') {
+            const topSong = [...state.all].sort((a,b) => (b.playCount || 0) - (a.playCount || 0))[0];
+            html = `<h1>Stats</h1><div class="stat-card"><small>Temps total</small><span class="stat-val">${Math.floor(state.stats.totalSeconds / 60)} min</span></div><div class="stat-card"><small>Titres finis</small><span class="stat-val">${state.stats.totalPlays}</span></div><div class="stat-card"><small>Top Titre</small><p>${topSong ? topSong.name : 'N/A'}</p></div>`;
+        } else if(state.view === 'liked-songs') {
+            const liked = state.all.filter(m => m.liked);
+            html = `<h1>Titres Likés</h1><div class="grid">${liked.map((m, i) => card(m, state.all.indexOf(m), 'main')).join('')}</div>`;
+        }
+        container.innerHTML = html;
+    }
+
+    function card(m, i, type) {
+        const img = m.ytId ? `https://img.youtube.com/vi/${m.ytId}/mqdefault.jpg` : `https://picsum.photos/seed/${m.id}/150`;
+        return `<div class="card" onclick="playTrack('${type}', ${i})">
+            <button class="del-btn" onclick="event.stopPropagation(); ${type==='pl'?`removeFromPl(${i})` : `deleteSong('${m.id}')`}">✕</button>
+            <img src="${img}">
+            <h4>${m.name}</h4>
+            <div class="card-meta">
+                <span onclick="event.stopPropagation(); toggleLike('${m.id}')">${m.liked?'❤️':'♡'}</span>
+                <button class="btn-action" onclick="event.stopPropagation(); showPlSelect('${m.id}')">📂</button>
+                ${!m.ytId ? `<button class="btn-action" onclick="event.stopPropagation(); downloadSong('${m.id}')">📥</button>` : ''}
+            </div>
+        </div>`;
+    }
+
+    function plCard(p, i) {
+        return `<div class="card" onclick="state.currentPlIdx=${i}; state.view='pl-detail'; render();">
+            <button class="del-btn" onclick="event.stopPropagation(); deletePlaylist(${i})">✕</button>
+            <img src="https://picsum.photos/seed/${p.name}/150?grayscale">
+            <h4>${p.name}</h4><p style="font-size:12px; color:grey">${p.tracks.length} titres</p>
+        </div>`;
+    }
+
+    // --- LECTURE AUDIO ---
+    function playTrack(type, i) {
+    if(type === 'main') state.activeList = [...state.all];
+    else if(type === 'pl') state.activeList = [...state.playlists[state.currentPlIdx].tracks];
+    
+    state.currentIdx = i;
+    const t = state.activeList[i];
+    if(!t) return;
+
+    audio.pause();
+    if(ytReady) ytPlayer.stopVideo();
+
+    if(t.ytId) {
+        ytPlayer.loadVideoById(t.ytId);
+    } else {
+        audio.src = t.url;
+        audio.play().catch(e => console.log("Lecture auto bloquée"));
+    }
+
+    isCounted = false;
+    document.getElementById('m-title').innerText = t.name;
+    document.getElementById('p-btn').innerText = '⏸';
+    
+    // On force l'état système à "playing"
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "playing";
+    updateNotification();
+}
+
+function togglePlay() { 
+    const t = state.activeList[state.currentIdx];
+    if(!t) return;
+
+    let isPlaying = false;
+    if(t.ytId) {
+        const ytStatus = ytPlayer.getPlayerState();
+        if(ytStatus === 1) { ytPlayer.pauseVideo(); isPlaying = false; }
+        else { ytPlayer.playVideo(); isPlaying = true; }
+    } else {
+        if(audio.paused) { audio.play(); isPlaying = true; }
+        else { audio.pause(); isPlaying = false; }
+    }
+
+    document.getElementById('p-btn').innerText = isPlaying ? '⏸' : '▶';
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+    }
+}
+
+    function togglePlay() { 
+    const t = state.activeList[state.currentIdx];
+    if(!t) return;
+
+    let isPlaying = false;
+
+    if(t.ytId) {
+        // Logique YouTube
+        const ytStatus = ytPlayer.getPlayerState();
+        if(ytStatus === 1) { 
+            ytPlayer.pauseVideo();
+            isPlaying = false;
+        } else { 
+            ytPlayer.playVideo();
+            isPlaying = true;
+        }
+    } else {
+        // Logique MP3 Local
+        if(audio.paused) { 
+            audio.play();
+            isPlaying = true;
+        } else { 
+            audio.pause();
+            isPlaying = false;
+        }
+    }
+
+    // Mise à jour visuelle du bouton
+    document.getElementById('p-btn').innerText = isPlaying ? '⏸' : '▶';
+
+    // Mise à jour de l'état du système (Barre de notif / Écran de verrouillage)
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+    }
+}
+
+
+    function next() {
+        if (state.activeList.length === 0) return;
+        if (state.repeatMode === 'shuffle') state.currentIdx = Math.floor(Math.random() * state.activeList.length);
+        else if (state.repeatMode === 'normal') state.currentIdx = (state.currentIdx + 1) % state.activeList.length;
+        playTrack('active', state.currentIdx);
+    }
+
+    function prev() {
+        state.currentIdx = (state.currentIdx - 1 + state.activeList.length) % state.activeList.length;
+        playTrack('active', state.currentIdx);
+    }
+
+    // --- PROGRESSION & SEEK ---
+    setInterval(() => {
+        const t = state.activeList[state.currentIdx];
+        if(!t) return;
+        let cur = 0, dur = 0;
+        if(t.ytId && ytReady) { cur = ytPlayer.getCurrentTime(); dur = ytPlayer.getDuration(); }
+        else { cur = audio.currentTime; dur = audio.duration; }
+
+        if(dur > 0) {
+            const percent = (cur / dur) * 100;
+            document.getElementById('progress-fill').style.width = percent + '%';
+            state.stats.totalSeconds += 1;
+            if(!isCounted && percent > 80) { state.stats.totalPlays++; isCounted = true; save(); }
+        }
+    }, 1000);
+
+    function seek(e) {
+        const t = state.activeList[state.currentIdx];
+        if(!t) return;
+        const rect = document.getElementById('seek-bar-container').getBoundingClientRect();
+        const percent = (e.clientX - rect.left) / rect.width;
+        if(t.ytId) ytPlayer.seekTo(percent * ytPlayer.getDuration());
+        else audio.currentTime = percent * audio.duration;
+    }
+
+    // --- FONCTIONS SYSTÈME & MODALS ---
+    function updateNotification() {
+    if ('mediaSession' in navigator) {
+        const t = state.activeList[state.currentIdx];
+        const img = t?.ytId ? `https://img.youtube.com/vi/${t.ytId}/hqdefault.jpg` : `https://picsum.photos/seed/${t ? t.id : 'default'}/512`;
+        
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: t ? t.name : "Kiko's Music",
+            artist: "Kiko Player",
+            artwork: [{ src: img, sizes: '512x512', type: 'image/png' }]
+        });
+
+        // Activation des boutons dans la notif
+        navigator.mediaSession.setActionHandler('play', () => togglePlay());
+        navigator.mediaSession.setActionHandler('pause', () => togglePlay());
+        navigator.mediaSession.setActionHandler('previoustrack', () => prev());
+        navigator.mediaSession.setActionHandler('nexttrack', () => next());
+    }
+}
+
+// --- EMPECHER LA PAUSE EN SORTANT DE L'APP ---
+// Ce petit script empêche le navigateur de couper le son quand l'onglet perd le focus
+document.addEventListener("visibilitychange", function() {
+    if (document.hidden) {
+        // Si une musique était en cours, on s'assure qu'elle continue
+        const t = state.activeList[state.currentIdx];
+        if(t && !t.ytId && !audio.paused) {
+            audio.play(); 
+        }
+    }
+});
+
+
+    function toggleShuffle() {
+        const btn = document.getElementById('shuf-btn');
+        if (state.repeatMode === 'shuffle') { state.repeatMode = 'repeat'; btn.innerText = '🔁'; btn.style.color = '#1db954'; }
+        else if (state.repeatMode === 'repeat') { state.repeatMode = 'normal'; btn.innerText = '➡️'; btn.style.color = '#b3b3b3'; }
+        else { state.repeatMode = 'shuffle'; btn.innerText = '🔀'; btn.style.color = '#1db954'; }
+    }
+
+    function nav(v, el) { state.view = v; document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active')); if(el) el.classList.add('active'); render(); }
+    function openAdd() { document.getElementById('overlay').style.display='block'; document.getElementById('add-modal').style.display='block'; }
+    function closeModals() { document.getElementById('overlay').style.display='none'; document.querySelectorAll('.modal').forEach(m => m.style.display='none'); }
+    function showPlSelect(id) { selectedSongId = id; const list = document.getElementById('pl-options-list'); list.innerHTML = state.playlists.map((pl, idx) => `<button class="pl-option" onclick="addToPlaylist(${idx})">${pl.name}</button>`).join('') || "<p style='padding:20px'>Aucune playlist.</p>"; document.getElementById('overlay').style.display='block'; document.getElementById('pl-select-modal').style.display='block'; }
+    function addToPlaylist(idx) { const song = state.all.find(s => s.id === selectedSongId); if(song && !state.playlists[idx].tracks.find(t => t.id === song.id)) { state.playlists[idx].tracks.push(song); save(); } closeModals(); }
+    function toggleLike(id) { const s = state.all.find(x => x.id === id); s.liked = !s.liked; const tx = db.transaction("songs", "readwrite"); tx.objectStore("songs").put({...s, url: undefined, blob: s.blob}); render(); }
+    function deleteSong(id) { if(confirm("Supprimer ce titre ?")) { const tx = db.transaction("songs","readwrite"); tx.objectStore("songs").delete(id); state.all = state.all.filter(s=>s.id!==id); render(); } }
+    function createPlaylist() { const n = prompt("Nom de la playlist :"); if(n) { state.playlists.push({name:n, tracks:[], liked:false}); save(); render(); } }
+
+    audio.onended = next;
+    nav('main');
+</script>
+</body>
+</html>
